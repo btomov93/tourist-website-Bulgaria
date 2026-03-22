@@ -1,23 +1,27 @@
-FROM node:20-alpine AS build
-
+# build stage
+FROM node:20 AS build
 WORKDIR /app
-
-COPY package*.json ./
-RUN npm install
-
 COPY . .
+RUN npm install && npm run build
 
-ARG VITE_API_BASE_URL=http://localhost:5000
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+# production stage
+FROM nginx:alpine
 
-RUN npm run build
+# clean config
+RUN rm -rf /etc/nginx/conf.d/*
 
-FROM nginx:1.27-alpine
+# create working nginx config
+RUN printf 'server {\n\
+  listen 80;\n\
+  server_name localhost;\n\
+  location / {\n\
+    root /usr/share/nginx/html;\n\
+    index index.html;\n\
+    try_files $uri $uri/ /index.html;\n\
+  }\n\
+}' > /etc/nginx/conf.d/default.conf
 
-COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+# copy built app
 COPY --from=build /app/dist /usr/share/nginx/html
 
-EXPOSE 3000
-
-CMD ["nginx", "-g", "daemon off;"]
-
+EXPOSE 80
